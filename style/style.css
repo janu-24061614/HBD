@@ -23,6 +23,7 @@ body {
   border-radius: 16px;
   box-shadow: 0 10px 30px rgba(0,0,0,0.12);
   padding: 2rem 1.5rem 4rem;
+  z-index: 10; /* keep content above decorative layers */
 }
 
 .container div.six {
@@ -157,6 +158,11 @@ body {
   opacity: 0.95;
 }
 
+.baloons {
+  pointer-events: none; /* don't block clicks */
+  z-index: 2; /* remain behind main content (container has z-index:10) */
+}
+
 .baloons img:nth-child(even) {
   left: -10%;
 }
@@ -223,6 +229,25 @@ body {
 }
 
 .sr-only { position: absolute; left: -10000px; top: auto; width: 1px; height: 1px; overflow: hidden; }
+
+/* Chat thread styles */
+.chat-thread {
+  margin-top: 12px;
+  text-align: left;
+  max-width: 420px;
+}
+.chat-msg {
+  display: inline-block;
+  background: rgba(255,255,255,0.9);
+  border-radius: 14px;
+  padding: 8px 12px;
+  margin: 6px 0;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.06);
+  opacity: 0;
+  transform: translateY(8px);
+}
+.chat-msg:nth-child(odd) { background: #fff7f9; }
+
 
 .eight svg:nth-child(1) {
   top: 7vh;

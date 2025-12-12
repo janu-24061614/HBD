@@ -195,18 +195,15 @@ const animationTimeline = () => {
       0.2,
       "+=1"
     )
-    .staggerFromTo(
-      ".baloons img",
-      2.5,
+    /* chat messages appear while the chat box is visible */
+    .staggerFrom(
+      ".chat-msg",
+      0.6,
       {
-        opacity: 0.9,
-        y: 1400
+        opacity: 0,
+        y: 10
       },
-      {
-        opacity: 1,
-        y: -1000
-      },
-      0.2
+      0.45
     )
     .from(
       ".lydia-dp",
@@ -292,6 +289,22 @@ const animationTimeline = () => {
       "+=1"
     );
 
+  /* Balloons animation moved to the very end so they don't overlay text */
+  tl.staggerFromTo(
+    ".baloons img",
+    3.2,
+    {
+      opacity: 0.9,
+      y: 1400
+    },
+    {
+      opacity: 1,
+      y: -1200,
+      ease: Expo.easeOut
+    },
+    0.18
+  );
+
   // tl.seek("currentStep");
   // tl.timeScale(2);
 
@@ -311,6 +324,13 @@ fetchData();
   const toggle = document.getElementById("music-toggle");
   const volume = document.getElementById("music-volume");
 
+  // synth fallback state
+  let audioCtx = null;
+  let synthNodes = [];
+  let isSynthPlaying = false;
+  const sourceEl = audio ? audio.querySelector('source') : null;
+  let hasSource = !!(sourceEl && sourceEl.getAttribute('src'));
+
   // If audio element missing, nothing to do
   if (!audio || !toggle || !volume) return;
 
@@ -329,19 +349,93 @@ fetchData();
     toggle.setAttribute('aria-label', playing ? 'Pause background music' : 'Play background music');
   };
 
-  // Try to play audio and handle promise for autoplay policies
+  // Simple webaudio synth to play a short 'Happy Birthday' melody when no file is provided
+  const ensureAudioCtx = () => {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    return audioCtx;
+  };
+
+  const playNote = (freq, start, dur) => {
+    const ctx = ensureAudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(0.12, start + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + dur - 0.02);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(start);
+    osc.stop(start + dur);
+    synthNodes.push(osc);
+  };
+
+  const playMelody = () => {
+    if (isSynthPlaying) return;
+    isSynthPlaying = true;
+    setPlayingState(true);
+    const ctx = ensureAudioCtx();
+    const now = ctx.currentTime + 0.05;
+    // Simple Happy Birthday (note frequencies in Hz)
+    const notes = [392,392,440,392,523,494, // Happy birthday to you
+                   392,392,440,392,587,523, // Happy birthday to you
+                   392,392,784,659,523,494,440, // Happy birthday dear ...
+                   698,698,659,523,587,523]; // Happy birthday to you
+    const durations = [0.36,0.18,0.54,0.54,0.54,0.84,
+                       0.36,0.18,0.54,0.54,0.54,0.84,
+                       0.36,0.18,0.54,0.54,0.54,0.54,1.0,
+                       0.36,0.18,0.54,0.54,0.54,1.0];
+    let t = now;
+    for (let i = 0; i < notes.length; i++) {
+      playNote(notes[i], t, durations[i]);
+      t += durations[i];
+    }
+    // mark finished
+    setTimeout(() => {
+      isSynthPlaying = false;
+      setPlayingState(false);
+    }, (t - now) * 1000 + 200);
+  };
+
+  const stopSynth = () => {
+    if (!audioCtx) return;
+    try {
+      synthNodes.forEach(n => { try { n.stop(); } catch (e) {} });
+    } catch (e) {}
+    synthNodes = [];
+    isSynthPlaying = false;
+    setPlayingState(false);
+  };
+
+  // Try to play audio and handle promise for autoplay policies; fall back to synth if no source or if play fails
   const tryPlay = async () => {
+    if (!hasSource) {
+      playMelody();
+      return;
+    }
     try {
       await audio.play();
       setPlayingState(true);
     } catch (err) {
-      // Play failed (autoplay blocked) — keep UI ready for user interaction
-      setPlayingState(false);
+      // Play failed (autoplay blocked) — fallback to synth
+      playMelody();
     }
   };
 
   // Attach user gesture on toggle button
   toggle.addEventListener("click", async e => {
+    if (!hasSource) {
+      // use synth fallback toggle
+      if (!isSynthPlaying) {
+        playMelody();
+      } else {
+        stopSynth();
+      }
+      return;
+    }
     if (audio.paused) {
       await tryPlay();
     } else {
@@ -362,6 +456,11 @@ fetchData();
   const replayBtn = document.getElementById("replay");
   if (replayBtn) {
     replayBtn.addEventListener('click', () => {
+      if (!hasSource) {
+        // start synth on click
+        playMelody();
+        return;
+      }
       if (audio.paused) {
         // try to play on user click
         tryPlay();
@@ -369,11 +468,14 @@ fetchData();
     });
   }
 
-  // Handle audio load error gracefully
+  // Handle audio load error gracefully — switch to synth fallback
   audio.addEventListener('error', () => {
-    toggle.disabled = true;
-    toggle.title = 'No audio file found (place a file at audio/song.mp3 to enable)';
-    toggle.innerText = '—';
+    hasSource = false;
+    toggle.title = 'No audio file found — using built-in melody instead';
   });
+
+  // Keep UI in sync with audio element events
+  audio.addEventListener('play', () => setPlayingState(true));
+  audio.addEventListener('pause', () => setPlayingState(false));
 
 })();
