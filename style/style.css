@@ -160,7 +160,51 @@ body {
 
 .baloons {
   pointer-events: none; /* don't block clicks */
-  z-index: 2; /* remain behind main content (container has z-index:10) */
+  position: absolute;
+}
+
+/* full-screen balloons stage that sits behind content */
+.baloons-stage {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  z-index: 1; /* behind the main container (container has z-index:10) */
+  pointer-events: none;
+}
+
+.baloons-stage .baloons img {
+  /* each balloon will be absolutely positioned inside the stage */
+  position: absolute;
+  will-change: transform, opacity;
+}
+
+/* confetti container */
+.confetti {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.confetti .piece {
+  position: absolute;
+  width: 8px;
+  height: 12px;
+  opacity: 0.95;
+  transform-origin: center;
+  will-change: transform, opacity;
+  border-radius: 2px;
+}
+
+/* small sparkle used near the final wish */
+.sparkle {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: radial-gradient(circle at 30% 30%, #fff, rgba(255,255,255,0.2));
+  border-radius: 50%;
+  pointer-events: none;
+  box-shadow: 0 0 8px rgba(255,255,255,0.9);
 }
 
 .baloons img:nth-child(even) {

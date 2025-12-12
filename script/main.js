@@ -305,6 +305,12 @@ const animationTimeline = () => {
     0.18
   );
 
+  // When timeline completes, trigger confetti and sparkles to create a "wow" finish
+  tl.eventCallback('onComplete', () => {
+    launchConfetti();
+    createSparkles();
+  });
+
   // tl.seek("currentStep");
   // tl.timeScale(2);
 
@@ -314,6 +320,58 @@ const animationTimeline = () => {
     tl.restart();
   });
 };
+
+/* ---------- Visual wow helpers: confetti and sparkles ---------- */
+function launchConfetti() {
+  const stage = document.querySelector('.confetti');
+  if (!stage) return;
+  // create 40 pieces
+  const colors = ['#ff6b6b','#ffd166','#6bf178','#6bd4ff','#c78bff','#ff9ad6'];
+  for (let i = 0; i < 40; i++) {
+    const el = document.createElement('div');
+    el.className = 'piece';
+    const left = Math.random() * 100;
+    el.style.left = left + 'vw';
+    el.style.top = (-10 - Math.random() * 10) + 'vh';
+    el.style.background = colors[Math.floor(Math.random() * colors.length)];
+    el.style.transform = `rotate(${Math.random()*360}deg)`;
+    stage.appendChild(el);
+
+    const duration = 2 + Math.random() * 2;
+    TweenMax.to(el, duration, {
+      y: 100 + Math.random() * 120 + 'vh',
+      rotation: Math.random() * 720,
+      x: (-50 + Math.random() * 100) + 'px',
+      opacity: 0,
+      ease: Power1.easeOut,
+      onComplete: () => el.remove()
+    });
+  }
+}
+
+function createSparkles() {
+  const container = document.querySelector('.container');
+  const wish = document.querySelector('.wish-hbd');
+  if (!container || !wish) return;
+  const rect = wish.getBoundingClientRect();
+  const containerRect = container.getBoundingClientRect();
+  // create sparkles around the wish text
+  const count = 12;
+  for (let i = 0; i < count; i++) {
+    const s = document.createElement('div');
+    s.className = 'sparkle';
+    const cx = rect.left - containerRect.left + Math.random() * rect.width;
+    const cy = rect.top - containerRect.top + Math.random() * rect.height;
+    s.style.left = cx + 'px';
+    s.style.top = cy + 'px';
+    container.appendChild(s);
+
+    const dx = (-40 + Math.random() * 80);
+    const dy = (-60 + Math.random() * -10);
+    const dur = 0.9 + Math.random() * 0.8;
+    TweenMax.fromTo(s, dur, {scale: 0, opacity: 1}, {x: dx, y: dy, scale: 1.4, opacity: 0, ease: Expo.easeOut, onComplete: () => s.remove()});
+  }
+}
 
 // Run fetch and animation in sequence
 fetchData();
@@ -477,5 +535,40 @@ fetchData();
   // Keep UI in sync with audio element events
   audio.addEventListener('play', () => setPlayingState(true));
   audio.addEventListener('pause', () => setPlayingState(false));
+
+  // Best-effort autoplay attempt on load. Modern browsers may block audible autoplay.
+  const autoStartMusic = async () => {
+    // If there is a source, try to play it immediately
+    if (hasSource) {
+      try {
+        await audio.play();
+        return;
+      } catch (e) {
+        // First attempt failed. Try muted autoplay (some browsers allow muted autoplay), then unmute.
+        try {
+          audio.muted = true;
+          await audio.play();
+          // try to unmute after a short delay; this may still be blocked in many browsers.
+          setTimeout(() => {
+            audio.muted = false;
+            audio.volume = parseFloat(volume.value) || 0.7;
+          }, 600);
+          return;
+        } catch (e2) {
+          // muted autoplay also failed; fall back to synth attempt
+        }
+      }
+    }
+
+    // No source or autoplay blocked — try synth fallback (best-effort; WebAudio may also require a gesture)
+    try {
+      playMelody();
+    } catch (err) {
+      // If even synth is blocked, we rely on user gesture (existing pointerdown handler)
+    }
+  };
+
+  // try auto-start shortly after load (gives browser a moment to initialize)
+  setTimeout(autoStartMusic, 200);
 
 })();
