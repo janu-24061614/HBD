@@ -5,42 +5,106 @@ let __visualsStarted = false;
 // enable verbose diagnostics
 const __debug = true;
 
-// Helper: start visuals when both data and audio are ready (or when audio is intentionally skipped)
+// Helper: start visuals when data is ready (audio is optional)
 const startVisualsIfReady = () => {
   if (__visualsStarted) return;
   if (!__dataReady) return;
-  // If audio hasn't started yet, wait (visuals will be started when audio starts).
-  if (!__audioStarted) return;
-  if (__debug) console.log('[diagnostic] startVisualsIfReady: conditions met, starting visuals');
+  
+  if (__debug) console.log('[diagnostic] startVisualsIfReady: data ready, starting visuals');
   __visualsStarted = true;
   animationTimeline();
+  
+  // Start a timer to auto-start audio if it hasn't started yet
+  if (!__audioStarted) {
+    setTimeout(() => {
+      if (!__audioStarted) {
+        if (__debug) console.log('[diagnostic] Auto-triggering audio start after delay');
+        __audioStarted = true; // Mark as started to prevent loops
+      }
+    }, 1000);
+  }
+};
+
+// Embedded customize data (fallback for CORS issues)
+const customizeData = {
+  "greeting": "Hello",
+  "name": "Swetha",
+  "greetingText": "Happy Birthday, dear sister!",
+  "wishText": "Some bonds are forever—cherished, celebrated, and held close.",
+  "imagePath": "img/swetha.png",
+  "text1": "Just a special note today...",
+  "textInChatBox": "Thank you for being a part of my sister. I'm not here to intrude, just to send my love and best wishes.",
+  "sendButtonLabel": "Send",
+  "text2": "I wondered how best to say it...",
+  "text3": "Then I simply thought...",
+  "text4": "You filled my life with",
+  "text4Adjective": "Great Support",
+  "text5Entry": "So today,",
+  "text5Content": "I simply wish you love, happiness, and endless laughter.",
+  "smiley": ":)",
+  "bigTextPart1": "T",
+  "bigTextPart2": "Y",
+  "wishHeading": "THANK YOU",
+  "outroText": "That's all—no expectations, just a warm wish from the heart.",
+  "replayText": "Or click if you want to read it again.",
+  "outroSmiley": ":)"
 };
 
 // Import the data to customize and insert them into page
 const fetchData = () => {
+  if (__debug) console.log('[diagnostic] fetchData: starting to load customize.json');
+  
+  // Try to fetch from file first, fallback to embedded data
   fetch("customize.json")
-    .then(data => data.json())
+    .then(response => {
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return response.json();
+    })
     .then(data => {
-      dataArr = Object.keys(data);
-      dataArr.map(customData => {
-        if (data[customData] !== "") {
-          if (customData === "imagePath") {
-            document
-              .querySelector(`[data-node-name*="${customData}"]`)
-              .setAttribute("src", data[customData]);
-          } else {
-            document.querySelector(`[data-node-name*="${customData}"]`).innerText = data[customData];
-          }
-        }
-
-        // Check if the iteration is over
-        // Mark data ready and attempt to start visuals
-        if ( dataArr.length === dataArr.indexOf(customData) + 1 ) {
-          __dataReady = true;
-          startVisualsIfReady();
-        }
-      });
+      if (__debug) console.log('[diagnostic] fetchData: loaded data from file', data);
+      processCustomizeData(data);
+    })
+    .catch(error => {
+      console.warn('[diagnostic] fetchData: Could not load customize.json, using embedded data:', error.message);
+      if (__debug) console.log('[diagnostic] fetchData: using embedded data', customizeData);
+      processCustomizeData(customizeData);
     });
+};
+
+// Process the customize data (whether from file or embedded)
+const processCustomizeData = (data) => {
+  const dataArr = Object.keys(data);
+  let processedCount = 0;
+  
+  dataArr.forEach((customData, index) => {
+    if (data[customData] !== "") {
+      const element = document.querySelector(`[data-node-name*="${customData}"]`);
+      
+      if (element) {
+        if (customData === "imagePath") {
+          element.setAttribute("src", data[customData]);
+          if (__debug) console.log(`[diagnostic] Set image src for ${customData}:`, data[customData]);
+        } else {
+          element.innerText = data[customData];
+          if (__debug) console.log(`[diagnostic] Set text for ${customData}:`, data[customData]);
+        }
+      } else {
+        if (__debug) console.warn(`[diagnostic] Element not found for data-node-name: ${customData}`);
+      }
+    }
+    
+    processedCount++;
+    
+    // Check if all items are processed
+    if (processedCount === dataArr.length) {
+      if (__debug) console.log('[diagnostic] processCustomizeData: all data processed, marking ready');
+      __dataReady = true;
+      // Start animations immediately after data is loaded
+      setTimeout(() => startVisualsIfReady(), 100);
+    }
+  });
 };
 
 // Animation Timeline
@@ -311,23 +375,29 @@ const animationTimeline = () => {
   /* Balloons animation moved to the very end so they don't overlay text */
   tl.staggerFromTo(
     ".baloons img",
-    3.2,
+    4.0,
     {
-      opacity: 0.9,
-      y: 1400
+      opacity: 0.8,
+      y: 1400,
+      scale: 0.5,
+      rotation: -180
     },
     {
       opacity: 1,
       y: -1200,
-      ease: Expo.easeOut
+      scale: 1,
+      rotation: 0,
+      ease: Elastic.easeOut.config(1, 0.3)
     },
-    0.18
+    0.15
   );
 
-  // When timeline completes, trigger confetti and sparkles to create a "wow" finish
+  // Enhanced completion effects
   tl.eventCallback('onComplete', () => {
     launchConfetti();
     createSparkles();
+    createFloatingHearts();
+    addScreenShake();
   });
 
   // tl.seek("currentStep");
@@ -344,25 +414,44 @@ const animationTimeline = () => {
 function launchConfetti() {
   const stage = document.querySelector('.confetti');
   if (!stage) return;
-  // create 40 pieces
-  const colors = ['#ff6b6b','#ffd166','#6bf178','#6bd4ff','#c78bff','#ff9ad6'];
-  for (let i = 0; i < 40; i++) {
+  // Enhanced confetti with more pieces and variety
+  const colors = ['#ff6b6b','#ffd166','#6bf178','#6bd4ff','#c78bff','#ff9ad6','#feca57','#ff9ff3','#54a0ff','#5f27cd'];
+  const shapes = ['circle', 'square', 'triangle'];
+  
+  for (let i = 0; i < 60; i++) {
     const el = document.createElement('div');
     el.className = 'piece';
     const left = Math.random() * 100;
+    const shape = shapes[Math.floor(Math.random() * shapes.length)];
+    
     el.style.left = left + 'vw';
-    el.style.top = (-10 - Math.random() * 10) + 'vh';
+    el.style.top = (-15 - Math.random() * 15) + 'vh';
     el.style.background = colors[Math.floor(Math.random() * colors.length)];
     el.style.transform = `rotate(${Math.random()*360}deg)`;
+    
+    // Different shapes
+    if (shape === 'circle') {
+      el.style.borderRadius = '50%';
+    } else if (shape === 'triangle') {
+      el.style.width = '0';
+      el.style.height = '0';
+      el.style.borderLeft = '6px solid transparent';
+      el.style.borderRight = '6px solid transparent';
+      el.style.borderBottom = `12px solid ${colors[Math.floor(Math.random() * colors.length)]}`;
+      el.style.background = 'transparent';
+    }
+    
     stage.appendChild(el);
 
-    const duration = 2 + Math.random() * 2;
+    const duration = 2.5 + Math.random() * 2.5;
+    const bounceHeight = 20 + Math.random() * 30;
+    
     TweenMax.to(el, duration, {
-      y: 100 + Math.random() * 120 + 'vh',
-      rotation: Math.random() * 720,
-      x: (-50 + Math.random() * 100) + 'px',
+      y: 120 + Math.random() * 150 + 'vh',
+      rotation: Math.random() * 1080,
+      x: (-80 + Math.random() * 160) + 'px',
       opacity: 0,
-      ease: Power1.easeOut,
+      ease: Bounce.easeOut,
       onComplete: () => el.remove()
     });
   }
@@ -374,8 +463,10 @@ function createSparkles() {
   if (!container || !wish) return;
   const rect = wish.getBoundingClientRect();
   const containerRect = container.getBoundingClientRect();
-  // create sparkles around the wish text
-  const count = 12;
+  // Enhanced sparkles with more variety
+  const count = 20;
+  const colors = ['#ffd700', '#ffff00', '#ff69b4', '#00ffff', '#ff6347', '#98fb98'];
+  
   for (let i = 0; i < count; i++) {
     const s = document.createElement('div');
     s.className = 'sparkle';
@@ -383,16 +474,74 @@ function createSparkles() {
     const cy = rect.top - containerRect.top + Math.random() * rect.height;
     s.style.left = cx + 'px';
     s.style.top = cy + 'px';
+    s.style.background = `radial-gradient(circle, ${colors[Math.floor(Math.random() * colors.length)]}, transparent)`;
     container.appendChild(s);
 
-    const dx = (-40 + Math.random() * 80);
-    const dy = (-60 + Math.random() * -10);
-    const dur = 0.9 + Math.random() * 0.8;
-    TweenMax.fromTo(s, dur, {scale: 0, opacity: 1}, {x: dx, y: dy, scale: 1.4, opacity: 0, ease: Expo.easeOut, onComplete: () => s.remove()});
+    const dx = (-60 + Math.random() * 120);
+    const dy = (-80 + Math.random() * -20);
+    const dur = 1.2 + Math.random() * 1.0;
+    const rotation = Math.random() * 720;
+    TweenMax.fromTo(s, dur, 
+      {scale: 0, opacity: 1, rotation: 0}, 
+      {x: dx, y: dy, scale: 1.8, opacity: 0, rotation: rotation, ease: Expo.easeOut, onComplete: () => s.remove()}
+    );
   }
 }
 
+// New floating hearts effect
+function createFloatingHearts() {
+  const container = document.querySelector('.container');
+  if (!container) return;
+  
+  const hearts = ['💖', '💕', '💗', '💝', '💘', '💞'];
+  const count = 15;
+  
+  for (let i = 0; i < count; i++) {
+    const heart = document.createElement('div');
+    heart.innerHTML = hearts[Math.floor(Math.random() * hearts.length)];
+    heart.style.cssText = `
+      position: absolute;
+      font-size: ${20 + Math.random() * 20}px;
+      left: ${Math.random() * 100}%;
+      top: 100%;
+      pointer-events: none;
+      z-index: 1000;
+    `;
+    container.appendChild(heart);
+    
+    const duration = 3 + Math.random() * 2;
+    const drift = (-50 + Math.random() * 100);
+    
+    TweenMax.to(heart, duration, {
+      y: -window.innerHeight - 100,
+      x: drift,
+      rotation: Math.random() * 360,
+      scale: 0.5 + Math.random() * 0.5,
+      opacity: 0,
+      ease: Power1.easeOut,
+      onComplete: () => heart.remove()
+    });
+  }
+}
+
+// Screen shake effect for dramatic impact
+function addScreenShake() {
+  const container = document.querySelector('.container');
+  if (!container) return;
+  
+  TweenMax.to(container, 0.1, {
+    x: 5,
+    yoyo: true,
+    repeat: 5,
+    ease: Power2.easeInOut,
+    onComplete: () => {
+      TweenMax.set(container, {x: 0});
+    }
+  });
+}
+
 // Run fetch and animation in sequence
+if (__debug) console.log('[diagnostic] Starting application initialization');
 fetchData();
 
 /* ---------------- Music player integration ---------------- */
@@ -634,57 +783,168 @@ fetchData();
   audio.addEventListener('play', () => setPlayingState(true));
   audio.addEventListener('pause', () => setPlayingState(false));
 
-  // Best-effort autoplay attempt on load. Modern browsers may block audible autoplay.
+  // Enhanced autoplay with better user experience
   const autoStartMusic = async () => {
     // If there is a source, try to play it immediately
     if (hasSource) {
       try {
+        // Try muted autoplay first (more likely to succeed)
+        audio.muted = true;
         await audio.play();
         __audioStarted = true;
         startVisualsIfReady();
+        
+        // Show a subtle notification to unmute
+        showUnmuteNotification();
+        
+        // Auto-unmute after user interaction
+        const autoUnmute = () => {
+          audio.muted = false;
+          audio.volume = parseFloat(volume.value) || 0.7;
+          setPlayingState(true);
+          document.removeEventListener('click', autoUnmute);
+          document.removeEventListener('keydown', autoUnmute);
+        };
+        
+        document.addEventListener('click', autoUnmute, { once: true });
+        document.addEventListener('keydown', autoUnmute, { once: true });
+        
         return;
       } catch (e) {
-        // First attempt failed. Try muted autoplay (some browsers allow muted autoplay), then unmute.
-        try {
-          audio.muted = true;
-          await audio.play();
-          __audioStarted = true;
-          startVisualsIfReady();
-          // try to unmute after a short delay; this may still be blocked in many browsers.
-          setTimeout(() => {
-            audio.muted = false;
-            audio.volume = parseFloat(volume.value) || 0.7;
-          }, 600);
-          return;
-        } catch (e2) {
-          // muted autoplay also failed; fall back to synth attempt
-        }
+        if (__debug) console.warn('[diagnostic] muted autoplay failed', e);
       }
     }
-    // No source or autoplay blocked — show a click overlay so user can enable sound.
+    // Enhanced overlay with better design
     const showEnableSoundOverlay = () => {
       if (__debug) console.log('[diagnostic] showEnableSoundOverlay: showing overlay to request user gesture');
       const overlay = document.createElement('div');
       overlay.className = 'enable-sound-overlay';
-      overlay.style.cssText = 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.5);color:#fff;z-index:9999;font-family:Work Sans, sans-serif;';
+      overlay.style.cssText = `
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.8), rgba(118, 75, 162, 0.8));
+        backdrop-filter: blur(10px);
+        color: #fff;
+        z-index: 9999;
+        font-family: 'Work Sans', sans-serif;
+        animation: fadeIn 0.5s ease-out;
+      `;
+      
       const box = document.createElement('div');
-      box.style.cssText = 'text-align:center;padding:18px 24px;background:rgba(0,0,0,0.6);border-radius:8px;cursor:pointer;';
-      box.innerText = 'Click to enable sound and start the experience';
+      box.style.cssText = `
+        text-align: center;
+        padding: 30px 40px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 20px;
+        cursor: pointer;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+        transition: all 0.3s ease;
+        max-width: 400px;
+      `;
+      
+      box.innerHTML = `
+        <div style="font-size: 3rem; margin-bottom: 1rem;">🎵</div>
+        <h3 style="margin: 0 0 1rem 0; font-size: 1.5rem;">Enable Sound</h3>
+        <p style="margin: 0; opacity: 0.9; line-height: 1.5;">Click anywhere to start the birthday experience with music!</p>
+      `;
+      
+      box.addEventListener('mouseenter', () => {
+        box.style.transform = 'translateY(-5px) scale(1.02)';
+        box.style.boxShadow = '0 25px 50px rgba(0, 0, 0, 0.3)';
+      });
+      
+      box.addEventListener('mouseleave', () => {
+        box.style.transform = 'translateY(0) scale(1)';
+        box.style.boxShadow = '0 20px 40px rgba(0, 0, 0, 0.2)';
+      });
+      
       overlay.appendChild(box);
-      overlay.addEventListener('pointerdown', () => {
+      overlay.addEventListener('click', () => {
         if (__debug) console.log('[diagnostic] showEnableSoundOverlay: overlay clicked, invoking gesture handler');
-        try { document.body.removeChild(overlay); } catch (e) {}
-        // trigger the same gesture handler to resume/create audio and start visuals
+        overlay.style.animation = 'fadeOut 0.3s ease-out';
+        setTimeout(() => {
+          try { document.body.removeChild(overlay); } catch (e) {}
+        }, 300);
         oneGesturePlayback();
       }, { once: true });
+      
+      // Add CSS animations
+      const style = document.createElement('style');
+      style.textContent = `
+        @keyframes fadeIn {
+          from { opacity: 0; transform: scale(0.9); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        @keyframes fadeOut {
+          from { opacity: 1; transform: scale(1); }
+          to { opacity: 0; transform: scale(0.9); }
+        }
+      `;
+      document.head.appendChild(style);
       document.body.appendChild(overlay);
+    };
+    
+    // Show unmute notification
+    const showUnmuteNotification = () => {
+      const notification = document.createElement('div');
+      notification.style.cssText = `
+        position: fixed;
+        top: 80px;
+        right: 20px;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: white;
+        padding: 12px 20px;
+        border-radius: 12px;
+        font-family: 'Work Sans', sans-serif;
+        font-size: 0.9rem;
+        z-index: 1000;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        animation: slideIn 0.5s ease-out;
+        cursor: pointer;
+      `;
+      
+      notification.innerHTML = '🔇 Click anywhere to unmute';
+      
+      const style = document.createElement('style');
+      style.textContent = `
+        @keyframes slideIn {
+          from { transform: translateX(100%); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes slideOut {
+          from { transform: translateX(0); opacity: 1; }
+          to { transform: translateX(100%); opacity: 0; }
+        }
+      `;
+      document.head.appendChild(style);
+      document.body.appendChild(notification);
+      
+      // Auto-remove after 5 seconds
+      setTimeout(() => {
+        notification.style.animation = 'slideOut 0.5s ease-out';
+        setTimeout(() => {
+          try { document.body.removeChild(notification); } catch (e) {}
+        }, 500);
+      }, 5000);
+      
+      // Remove on click
+      notification.addEventListener('click', () => {
+        notification.style.animation = 'slideOut 0.5s ease-out';
+        setTimeout(() => {
+          try { document.body.removeChild(notification); } catch (e) {}
+        }, 500);
+      });
     };
 
     // show overlay to get user gesture
     showEnableSoundOverlay();
   };
 
-  // try auto-start shortly after load (gives browser a moment to initialize)
-  setTimeout(autoStartMusic, 200);
+  // Enhanced auto-start with better timing
+  setTimeout(autoStartMusic, 500);
 
 })();
