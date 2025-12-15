@@ -1,3 +1,21 @@
+// Flags to coordinate audio and visuals
+let __dataReady = false;
+let __audioStarted = false;
+let __visualsStarted = false;
+// enable verbose diagnostics
+const __debug = true;
+
+// Helper: start visuals when both data and audio are ready (or when audio is intentionally skipped)
+const startVisualsIfReady = () => {
+  if (__visualsStarted) return;
+  if (!__dataReady) return;
+  // If audio hasn't started yet, wait (visuals will be started when audio starts).
+  if (!__audioStarted) return;
+  if (__debug) console.log('[diagnostic] startVisualsIfReady: conditions met, starting visuals');
+  __visualsStarted = true;
+  animationTimeline();
+};
+
 // Import the data to customize and insert them into page
 const fetchData = () => {
   fetch("customize.json")
@@ -16,10 +34,11 @@ const fetchData = () => {
         }
 
         // Check if the iteration is over
-        // Run amimation if so
+        // Mark data ready and attempt to start visuals
         if ( dataArr.length === dataArr.indexOf(customData) + 1 ) {
-          animationTimeline();
-        } 
+          __dataReady = true;
+          startVisualsIfReady();
+        }
       });
     });
 };
@@ -415,7 +434,11 @@ fetchData();
   const ensureAudioCtx = () => {
     if (!audioCtx) {
       // only create AudioContext after a user gesture
-      if (!userGestureOccurred) return null;
+      if (!userGestureOccurred) {
+        if (__debug) console.log('[diagnostic] ensureAudioCtx: creation blocked (no user gesture yet)');
+        return null;
+      }
+      if (__debug) console.log('[diagnostic] ensureAudioCtx: creating AudioContext');
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     }
     return audioCtx;
@@ -442,10 +465,15 @@ fetchData();
     const ctx = ensureAudioCtx();
     if (!ctx) {
       pendingPlayMelody = true;
+      if (__debug) console.log('[diagnostic] playMelody: pending until user gesture');
       return;
     }
     isSynthPlaying = true;
     setPlayingState(true);
+    if (__debug) console.log('[diagnostic] playMelody: starting synth melody');
+    // synth is now playing — mark audio started so visuals can proceed
+    __audioStarted = true;
+    startVisualsIfReady();
     const now = ctx.currentTime + 0.05;
     // Simple Happy Birthday (note frequencies in Hz)
     const notes = [392,392,440,392,523,494, // Happy birthday to you
@@ -484,10 +512,16 @@ fetchData();
       playMelody();
       return;
     }
+    if (__debug) console.log('[diagnostic] tryPlay: attempting audio.play()', {src: sourceEl ? sourceEl.getAttribute('src') : null});
     try {
       await audio.play();
+      if (__debug) console.log('[diagnostic] tryPlay: audio.play() succeeded');
       setPlayingState(true);
+      // audio element began playback — mark audio started and start visuals
+      __audioStarted = true;
+      startVisualsIfReady();
     } catch (err) {
+      if (__debug) console.warn('[diagnostic] tryPlay: audio.play() failed', err);
       // Play failed (autoplay blocked) — fallback to synth
       playMelody();
     }
@@ -495,6 +529,7 @@ fetchData();
 
   // Attach user gesture on toggle button
   toggle.addEventListener("click", async e => {
+    if (__debug) console.log('[diagnostic] toggle click');
     // mark that a user gesture occurred so creating/resuming AudioContext is allowed
     userGestureOccurred = true;
     if (audioCtx && audioCtx.state === 'suspended') {
@@ -522,12 +557,13 @@ fetchData();
 
   // If user interacts anywhere on the container, attempt to start audio once
   const oneGesturePlayback = async () => {
+    if (__debug) console.log('[diagnostic] pointerdown gesture detected');
     userGestureOccurred = true;
     // If an AudioContext was created and is suspended, resume it on gesture.
     if (audioCtx && audioCtx.state === 'suspended') {
-      try { await audioCtx.resume(); } catch (e) {}
+      try { await audioCtx.resume(); } catch (e) { if (__debug) console.warn('[diagnostic] resume failed', e); }
     } else {
-      try { ensureAudioCtx(); } catch (e) {}
+      try { ensureAudioCtx(); } catch (e) { if (__debug) console.warn('[diagnostic] ensureAudioCtx threw', e); }
     }
     // If a melody was requested earlier, play it now
     if (pendingPlayMelody) {
@@ -567,6 +603,12 @@ fetchData();
   });
 
   // Keep UI in sync with audio element events
+  audio.addEventListener('playing', () => {
+    __audioStarted = true;
+    startVisualsIfReady();
+  });
+  audio.addEventListener('play', () => { if (__debug) console.log('[diagnostic] audio event: play'); });
+  audio.addEventListener('pause', () => { if (__debug) console.log('[diagnostic] audio event: pause'); });
   audio.addEventListener('play', () => setPlayingState(true));
   audio.addEventListener('pause', () => setPlayingState(false));
 
@@ -576,12 +618,16 @@ fetchData();
     if (hasSource) {
       try {
         await audio.play();
+        __audioStarted = true;
+        startVisualsIfReady();
         return;
       } catch (e) {
         // First attempt failed. Try muted autoplay (some browsers allow muted autoplay), then unmute.
         try {
           audio.muted = true;
           await audio.play();
+          __audioStarted = true;
+          startVisualsIfReady();
           // try to unmute after a short delay; this may still be blocked in many browsers.
           setTimeout(() => {
             audio.muted = false;
@@ -593,10 +639,27 @@ fetchData();
         }
       }
     }
+    // No source or autoplay blocked — show a click overlay so user can enable sound.
+    const showEnableSoundOverlay = () => {
+      if (__debug) console.log('[diagnostic] showEnableSoundOverlay: showing overlay to request user gesture');
+      const overlay = document.createElement('div');
+      overlay.className = 'enable-sound-overlay';
+      overlay.style.cssText = 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.5);color:#fff;z-index:9999;font-family:Work Sans, sans-serif;';
+      const box = document.createElement('div');
+      box.style.cssText = 'text-align:center;padding:18px 24px;background:rgba(0,0,0,0.6);border-radius:8px;cursor:pointer;';
+      box.innerText = 'Click to enable sound and start the experience';
+      overlay.appendChild(box);
+      overlay.addEventListener('pointerdown', () => {
+        if (__debug) console.log('[diagnostic] showEnableSoundOverlay: overlay clicked, invoking gesture handler');
+        try { document.body.removeChild(overlay); } catch (e) {}
+        // trigger the same gesture handler to resume/create audio and start visuals
+        oneGesturePlayback();
+      }, { once: true });
+      document.body.appendChild(overlay);
+    };
 
-    // No source or autoplay blocked — do not start the synth here.
-    // Creating a WebAudio AudioContext or starting oscillators must happen
-    // during a user gesture; the existing `pointerdown` handler will trigger playback.
+    // show overlay to get user gesture
+    showEnableSoundOverlay();
   };
 
   // try auto-start shortly after load (gives browser a moment to initialize)
