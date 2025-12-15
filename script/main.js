@@ -401,6 +401,13 @@ fetchData();
   const toggle = document.getElementById("music-toggle");
   const volume = document.getElementById("music-volume");
 
+  // Helpful diagnostics: expose audio src and enable anonymous CORS to detect header issues
+  if (audio && audio.querySelector('source')) {
+    const srcEl = audio.querySelector('source');
+    if (__debug) console.log('[diagnostic] audio source element src=', srcEl.getAttribute('src'));
+    try { audio.crossOrigin = 'anonymous'; } catch (e) { if (__debug) console.warn('[diagnostic] set crossOrigin failed', e); }
+  }
+
   // synth fallback state
   let audioCtx = null;
   let synthNodes = [];
@@ -597,10 +604,25 @@ fetchData();
   }
 
   // Handle audio load error gracefully — switch to synth fallback
-  audio.addEventListener('error', () => {
+  audio.addEventListener('error', (ev) => {
+    if (__debug) console.error('[diagnostic] audio error event', ev, audio.error);
     hasSource = false;
     toggle.title = 'No audio file found — using built-in melody instead';
   });
+
+  // Additional diagnostic listeners to help determine why audio plays silently
+  audio.addEventListener('loadedmetadata', () => {
+    if (__debug) console.log('[diagnostic] loadedmetadata: duration=', audio.duration, 'readyState=', audio.readyState, 'networkState=', audio.networkState);
+  });
+  audio.addEventListener('canplay', () => {
+    if (__debug) console.log('[diagnostic] canplay event: muted=', audio.muted, 'volume=', audio.volume, 'readyState=', audio.readyState);
+  });
+  audio.addEventListener('canplaythrough', () => {
+    if (__debug) console.log('[diagnostic] canplaythrough: audio should be playable to the end');
+  });
+  audio.addEventListener('stalled', () => { if (__debug) console.warn('[diagnostic] audio stalled (network)'); });
+  audio.addEventListener('suspend', () => { if (__debug) console.log('[diagnostic] audio suspend'); });
+  audio.addEventListener('waiting', () => { if (__debug) console.log('[diagnostic] audio waiting for data'); });
 
   // Keep UI in sync with audio element events
   audio.addEventListener('playing', () => {
