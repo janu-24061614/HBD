@@ -504,9 +504,11 @@ fetchData();
 
   // If user interacts anywhere on the container, attempt to start audio once
   const oneGesturePlayback = () => {
+    // If an AudioContext was created and is suspended, resume it on gesture.
+    if (audioCtx && audioCtx.state === 'suspended') {
+      try { audioCtx.resume(); } catch (e) {}
+    }
     tryPlay();
-    // remove listener after first gesture
-    document.body.removeEventListener('pointerdown', oneGesturePlayback);
   };
   document.body.addEventListener('pointerdown', oneGesturePlayback, { once: true });
 
@@ -560,12 +562,9 @@ fetchData();
       }
     }
 
-    // No source or autoplay blocked — try synth fallback (best-effort; WebAudio may also require a gesture)
-    try {
-      playMelody();
-    } catch (err) {
-      // If even synth is blocked, we rely on user gesture (existing pointerdown handler)
-    }
+    // No source or autoplay blocked — do not start the synth here.
+    // Creating a WebAudio AudioContext or starting oscillators must happen
+    // during a user gesture; the existing `pointerdown` handler will trigger playback.
   };
 
   // try auto-start shortly after load (gives browser a moment to initialize)
