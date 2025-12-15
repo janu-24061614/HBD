@@ -108,11 +108,12 @@
 </body>
 
   <!-- Background audio: place your audio file at audio/song.mp3 -->
-  <audio id="bg-audio" preload="auto" loop>
+  <audio id="bg-audio" preload="auto" loop playsinline>
     <source src="audio/song.mp3" type="audio/mpeg">
     <!-- Fallback text if audio unsupported -->
     Your browser does not support the audio element.
   </audio>
+
 
   <!-- Balloons stage: fixed full-screen layer behind content -->
   <div class="baloons-stage" aria-hidden="true">
@@ -154,7 +155,7 @@
     <div class="confetti" aria-hidden="true"></div>
   </div>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/1.20.3/TweenMax.min.js"></script>
+  <script src="script/TweenMax.min.js"></script>
   <script type="application/javascript" src="script/main.js"></script>
 
 </html>
