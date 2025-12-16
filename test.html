@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test - Birthday Wishes</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f0f0f0;
+        }
+        .test-container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .success { color: green; }
+        .error { color: red; }
+        .info { color: blue; }
+    </style>
+</head>
+<body>
+    <h1>Birthday Wishes - Debug Test</h1>
+    
+    <div class="test-container">
+        <h2>1. Testing customize.json Loading</h2>
+        <div id="json-test">Loading...</div>
+    </div>
+    
+    <div class="test-container">
+        <h2>2. Testing Data Elements</h2>
+        <div id="elements-test">Checking...</div>
+    </div>
+    
+    <div class="test-container">
+        <h2>3. Sample Data from customize.json</h2>
+        <div id="sample-data">Loading...</div>
+    </div>
+    
+    <div class="test-container">
+        <h2>4. Actions</h2>
+        <button onclick="window.open('index.html', '_blank')">Open Main Birthday Page</button>
+        <button onclick="location.reload()">Reload Test</button>
+    </div>
+
+    <script>
+        // Test 1: Load customize.json
+        fetch('customize.json')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                document.getElementById('json-test').innerHTML = 
+                    '<span class="success">✓ customize.json loaded successfully</span>';
+                
+                // Test 3: Show sample data
+                let sampleHtml = '<ul>';
+                Object.keys(data).forEach(key => {
+                    sampleHtml += `<li><strong>${key}:</strong> ${data[key]}</li>`;
+                });
+                sampleHtml += '</ul>';
+                document.getElementById('sample-data').innerHTML = sampleHtml;
+                
+                // Test 2: Check if elements exist
+                let elementsHtml = '<ul>';
+                let foundCount = 0;
+                let totalCount = 0;
+                
+                Object.keys(data).forEach(key => {
+                    totalCount++;
+                    const element = document.querySelector(`[data-node-name*="${key}"]`);
+                    if (element) {
+                        foundCount++;
+                        elementsHtml += `<li class="success">✓ Found element for: ${key}</li>`;
+                    } else {
+                        elementsHtml += `<li class="error">✗ Missing element for: ${key}</li>`;
+                    }
+                });
+                
+                elementsHtml += `</ul><p><strong>Summary:</strong> ${foundCount}/${totalCount} elements found</p>`;
+                
+                if (foundCount === totalCount) {
+                    elementsHtml += '<p class="success">All elements found! The issue might be in the timing or animation logic.</p>';
+                } else {
+                    elementsHtml += '<p class="error">Some elements are missing. Check the HTML structure.</p>';
+                }
+                
+                document.getElementById('elements-test').innerHTML = elementsHtml;
+            })
+            .catch(error => {
+                document.getElementById('json-test').innerHTML = 
+                    `<span class="error">✗ Failed to load customize.json: ${error.message}</span>`;
+                document.getElementById('sample-data').innerHTML = 
+                    '<span class="error">Could not load data due to fetch error</span>';
+                document.getElementById('elements-test').innerHTML = 
+                    '<span class="error">Cannot test elements without data</span>';
+            });
+    </script>
+</body>
+</html>
